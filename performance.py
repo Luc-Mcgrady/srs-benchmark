@@ -1,22 +1,15 @@
 # You can pass arguments to this script as if it were script.py
 import script
 from timeit import timeit
-import pyarrow.parquet as pq
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+from utils import get_rows_for_user
 
-USERS = 10000
-
-sizes = []
-for id in range(1, USERS):
-    metadata = pq.ParquetFile(
-        script.DATA_PATH / "revlogs" / f"user_id={id}" / "data.parquet"
-    ).metadata
-
-    sizes.append([id, metadata.num_rows])
+sizes = list(enumerate(get_rows_for_user(i, script.DATA_PATH) for i in range(1, USERS)))
 
 sizes = sorted(sizes, key=lambda e: e[1])
 
+USERS_COUNT = 10000
 USER_ID = 2
 N = 100
 
@@ -36,7 +29,9 @@ row_counts = []
 a_times = []
 # b_times = []
 
-for i in (progress := tqdm(range(1, USERS, USERS // N))):
+print(sum([a[1] for a in sizes]))
+
+for i in (progress := tqdm(range(1, USERS_COUNT, USERS_COUNT // N))):
     USER_ID = sizes[i][0]
     rows = sizes[i][1]
 

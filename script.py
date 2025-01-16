@@ -14,7 +14,7 @@ from itertools import accumulate
 import pyarrow.parquet as pq  # type: ignore
 import torch
 from config import create_parser
-from utils import catch_exceptions
+from utils import catch_exceptions, get_rows_for_user
 
 parser = create_parser()
 args = parser.parse_args()
@@ -54,7 +54,6 @@ from fsrs_optimizer import (  # type: ignore
     rmse_matrix,
 )
 
-
 model = FSRS
 optimizer = Optimizer(float_delta_t=SECS_IVL)
 lr: float = 4e-2
@@ -65,7 +64,6 @@ batch_size: int = 512
 max_seq_len: int = 64
 verbose: bool = False
 verbose_inadequate_data: bool = False
-
 
 if RUST:
     os.environ["FSRS_NO_OUTLIER"] = "1"
@@ -387,10 +385,13 @@ if __name__ == "__main__":
     if RAW and raw_file.exists():
         sort_jsonl(raw_file)
 
+    unprocessed_rows = 0
+
     for user_id in dataset.partitioning.dictionaries[0]:
         if user_id.as_py() in processed_user:
             continue
         unprocessed_users.append(user_id.as_py())
+        unprocessed_rows += get_rows_for_user(user_id.as_py(), DATA_PATH)
 
     unprocessed_users.sort()
 
@@ -402,23 +403,23 @@ if __name__ == "__main__":
             )
             for user_id in unprocessed_users
         ]
-        for future in (
-            pbar := tqdm(as_completed(futures), total=len(futures), smoothing=0.03)
-        ):
-            try:
-                result, error = future.result()
-                if error:
-                    tqdm.write(error)
-                else:
-                    stats, raw = result
-                    with open(result_file, "a") as f:
-                        f.write(json.dumps(stats, ensure_ascii=False) + "\n")
-                    if raw:
-                        with open(raw_file, "a") as f:
-                            f.write(json.dumps(raw, ensure_ascii=False) + "\n")
-                    pbar.set_description(f"Processed {stats['user']}")
-            except Exception as e:
-                tqdm.write(str(e))
+        with tqdm(total=unprocessed_rows) as pbar:
+            for future in as_completed(futures):
+                try:
+                    result, error = future.result()
+                    if error:
+                        tqdm.write(error)
+                    else:
+                        stats, raw = result
+                        with open(result_file, "a") as f:
+                            f.write(json.dumps(stats, ensure_ascii=False) + "\n")
+                        if raw:
+                            with open(raw_file, "a") as f:
+                                f.write(json.dumps(raw, ensure_ascii=False) + "\n")
+                        pbar.set_description(f"Processed {stats['user']} users")
+                        pbar.update(get_rows_for_user(stats["user"], DATA_PATH))
+                except Exception as e:
+                    tqdm.write(str(e))
 
     sort_jsonl(result_file)
     if RAW:

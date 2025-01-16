@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import root_mean_squared_error  # type: ignore
 import traceback
 from functools import wraps
+import pyarrow.parquet as pq
 
 
 def catch_exceptions(func):
@@ -85,3 +86,9 @@ def cross_comparison(revlogs, algoA, algoB, graph=False):
         ax.set_xticks(np.arange(0, 1.1, 0.1))
         fig.show()
     return universal_metric_list
+
+
+def get_rows_for_user(user_id: int, data_path: str):
+    return pq.ParquetFile(
+        data_path / "revlogs" / f"user_id={user_id}" / "data.parquet"
+    ).metadata.num_rows
