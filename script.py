@@ -403,7 +403,7 @@ if __name__ == "__main__":
             )
             for user_id in unprocessed_users
         ]
-        with tqdm(total=unprocessed_rows) as pbar:
+        with tqdm(total=unprocessed_rows, smoothing=0.03) as pbar:
             for future in as_completed(futures):
                 try:
                     result, error = future.result()
