@@ -5,13 +5,13 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from utils import get_rows_for_user
 
-sizes = list(enumerate(get_rows_for_user(i, script.DATA_PATH) for i in range(1, USERS)))
-
-sizes = sorted(sizes, key=lambda e: e[1])
 
 USERS_COUNT = 10000
 USER_ID = 2
 N = 100
+
+sizes = list(enumerate(get_rows_for_user(i, script.DATA_PATH) for i in range(1, USERS_COUNT)))
+sizes = sorted(sizes, key=lambda e: e[1])
 
 
 def process_wrapper_a():
