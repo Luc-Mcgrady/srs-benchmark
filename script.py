@@ -118,7 +118,6 @@ def predict(w_list, testsets, user_id=None):
                 save_tmp.append(partition_testset)
     if user_id:
         save_tmp = pd.concat(save_tmp)
-        del save_tmp["tensor"]
         if FILE:
             save_tmp.to_csv(f"evaluation/{path}/{user_id}.tsv", sep="\t", index=False)
 
@@ -189,15 +188,10 @@ def create_time_series(df):
         lambda x: cum_concat([[i] for i in x])
     )
     df["r_history"] = [
-        ",".join(map(str, item[:-1])) for sublist in r_history_list for item in sublist
+        item[:-1] for sublist in r_history_list for item in sublist
     ]
     df["t_history"] = [
-        ",".join(map(str, item[:-1])) for sublist in t_history_list for item in sublist
-    ]
-    df["tensor"] = [
-        torch.tensor((t_item[:-1], r_item[:-1])).transpose(0, 1)
-        for t_sublist, r_sublist in zip(t_history_list, r_history_list)
-        for t_item, r_item in zip(t_sublist, r_sublist)
+        item[:-1] for sublist in t_history_list for item in sublist
     ]
     last_rating = []
     for t_sublist, r_sublist in zip(t_history_list, r_history_list):
@@ -304,6 +298,7 @@ def process(user_id):
                         )
                         partition_weights[partition] = trainer.train(verbose=verbose)
             except Exception as e:
+                raise e
                 if str(e).endswith("inadequate."):
                     if verbose_inadequate_data:
                         print("Skipping - Inadequate data")
