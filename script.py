@@ -232,6 +232,7 @@ def create_time_series(df):
         df["first_rating"] = df["first_rating"].map(lambda x: "1" if x == 1 else "3")
     return df[df["elapsed_days"] > 0].sort_values(by=["review_th"])
 
+DEVICE = "cpu"
 
 @catch_exceptions
 def process(user_id):
@@ -301,6 +302,7 @@ def process(user_id):
                             batch_size=batch_size,
                             max_seq_len=max_seq_len,
                             enable_short_term=not DISABLE_SHORT_TERM,
+                            device=DEVICE
                         )
                         partition_weights[partition] = trainer.train(verbose=verbose)
             except Exception as e:
