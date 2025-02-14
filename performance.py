@@ -20,7 +20,7 @@ MEMORY = bool(os.environ.get("MEM", False))  # Significantly impacts run speed
 
 # Graph Display Info
 A_NAME = "orig"
-B_NAME = "columns= filter="
+B_NAME = "filter columns"
 TITLE = "filter in pq load"
 
 # Don't change
@@ -136,7 +136,7 @@ def create_time_series2(df):
 @catch_exceptions
 def process2(user_id):
     plt.close("all")
-    columns = ["card_id", "day_offset", "rating", "elapsed_days"]
+    columns = ["card_id", "rating", "elapsed_days"]
     if SECS_IVL:
         columns.append("elapsed_seconds")
     df_revlogs = pd.read_parquet(
