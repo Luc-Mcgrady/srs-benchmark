@@ -54,10 +54,22 @@ b_losses = np.zeros(N)
 a_memory = np.zeros(N)
 b_memory = np.zeros(N)
 
+from script import backend
+
+actual_benchmark = backend.benchmark
 
 def process_wrapper(uid: int):
+
+    start = 0.
+
+    def timed_benchmark(fsrs_items):
+        nonlocal start
+        start = timeit.default_timer()
+        return actual_benchmark(fsrs_items)
+
+    script.benchmark = timed_benchmark
+
     tracemalloc.start()
-    start = timeit.default_timer()
     (result, _), err = script.process(uid)
     _, memory = tracemalloc.get_traced_memory()
     time = timeit.default_timer() - start

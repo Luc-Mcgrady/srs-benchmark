@@ -228,6 +228,9 @@ def create_time_series(df):
     return df[df["elapsed_days"] > 0].sort_values(by=["review_th"])
 
 
+def benchmark(train_set_items):
+    backend.benchmark(train_set_items)
+
 @catch_exceptions
 def process(user_id):
     plt.close("all")
@@ -283,7 +286,7 @@ def process(user_id):
                 if RUST:
                     train_set_items = convert_to_items(train_partition)
                     partition_weights[partition] = list(
-                        map(lambda x: round(x, 4), backend.benchmark(train_set_items))
+                        map(lambda x: round(x, 4), benchmark(train_set_items))
                     )
                 else:
                     optimizer.define_model()
