@@ -21,9 +21,12 @@ DATA_PATH = Path(args.data)
 
 def process_user(user_id):
     dataset = pd.read_parquet(
-        DATA_PATH / "revlogs", filters=[("user_id", "=", user_id)]
+        DATA_PATH / "revlogs", filters=[("user_id", "=", user_id)], columns=["card_id", "rating", "elapsed_days"]
     )
-    dataset = create_features(dataset, model_name=MODEL_NAME)
+    dataset["delta_t"] = dataset["elapsed_days"]
+    dataset = create_features(
+        dataset, model_name=MODEL_NAME, secs_ivl=SECS_IVL, short_term=SHORT_TERM
+    )
     return user_id, dataset
 
 
