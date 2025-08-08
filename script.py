@@ -231,6 +231,141 @@ def create_time_series(df):
 
 
 @catch_exceptions
+def process2(user_id):
+    plt.close("all")
+    columns = ["card_id", "rating", "elapsed_days"]
+    if SECS_IVL:
+        columns.append("elapsed_seconds")
+    df_revlogs = pd.read_parquet(
+        DATA_PATH / "revlogs" / f"{user_id=}",
+        filters=[("rating", "in", [1, 2, 3, 4])],
+        columns=columns,
+    )
+    dataset = create_time_series(df_revlogs)
+    if dataset.shape[0] < 6:
+        raise Exception(f"{user_id} does not have enough data.")
+    if PARTITIONS != "none":
+        df_cards = pd.read_parquet(
+            DATA_PATH / "cards", filters=[("user_id", "=", user_id)]
+        )
+        df_cards.drop(columns=["user_id"], inplace=True)
+        df_decks = pd.read_parquet(
+            DATA_PATH / "decks", filters=[("user_id", "=", user_id)]
+        )
+        df_decks.drop(columns=["user_id"], inplace=True)
+        dataset = dataset.merge(df_cards, on="card_id", how="left").merge(
+            df_decks, on="deck_id", how="left"
+        )
+        dataset.fillna(-1, inplace=True)
+        if PARTITIONS == "preset":
+            dataset["partition"] = dataset["preset_id"].astype(int)
+        elif PARTITIONS == "deck":
+            dataset["partition"] = dataset["deck_id"].astype(int)
+    else:
+        dataset["partition"] = 0
+    w_list = []
+    testsets = []
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    for train_index, test_index in tscv.split(dataset):
+        train_set = dataset.iloc[train_index].copy()
+        test_set = dataset.iloc[test_index].copy()
+        if NO_TEST_SAME_DAY:
+            test_set = test_set[test_set["elapsed_days"] > 0].copy()
+        testsets.append(test_set)
+        partition_weights = {}
+        for partition in train_set["partition"].unique():
+            try:
+                train_partition = train_set[train_set["partition"] == partition].copy()
+                if RECENCY:
+                    x = np.linspace(0, 1, len(train_partition))
+                    train_partition["weights"] = 0.25 + 0.75 * np.power(x, 3)
+                if DRY_RUN:
+                    optimizer.define_model()
+                    partition_weights[partition] = optimizer.init_w
+                    continue
+                if RUST:
+                    train_set_items = convert_to_items(train_partition)
+                    partition_weights[partition] = list(
+                        map(lambda x: round(x, 4), backend.benchmark(train_set_items))
+                    )
+                else:
+                    optimizer.define_model()
+                    _ = optimizer.pretrain(dataset=train_partition, verbose=verbose)
+                    if ONLY_PRETRAIN:
+                        partition_weights[partition] = optimizer.init_w
+                    else:
+                        trainer = Trainer(
+                            train_partition,
+                            None,
+                            optimizer.init_w,
+                            n_epoch=n_epoch,
+                            lr=lr,
+                            gamma=gamma,
+                            batch_size=batch_size,
+                            max_seq_len=max_seq_len,
+                            enable_short_term=not DISABLE_SHORT_TERM,
+                        )
+                        partition_weights[partition] = trainer.train(verbose=verbose)
+            except Exception as e:
+                if str(e).endswith("inadequate."):
+                    if verbose_inadequate_data:
+                        print("Skipping - Inadequate data")
+                else:
+                    print(f"User: {user_id}")
+                    raise e
+                optimizer.define_model()
+                partition_weights[partition] = optimizer.init_w
+        w_list.append(partition_weights)
+
+    p, y, evaluation = predict(w_list, testsets, user_id)
+    last_y = y
+
+    if PLOT:
+        fig = plt.figure()
+        plot_brier(p, y, ax=fig.add_subplot(111))
+        fig.savefig(f"evaluation/{path}/{user_id}.png")
+
+    p_calibrated = lowess(
+        y, p, it=0, delta=0.01 * (max(p) - min(p)), return_sorted=False
+    )
+    ici = np.mean(np.abs(p_calibrated - p))
+    rmse_raw = root_mean_squared_error(y_true=y, y_pred=p)
+    logloss = log_loss(y_true=y, y_pred=p, labels=[0, 1])
+    rmse_bins = rmse_matrix(evaluation)
+    try:
+        auc = round(roc_auc_score(y_true=y, y_score=p), 6)
+    except Exception:
+        auc = None
+
+    result = {
+        "metrics": {
+            "RMSE": round(rmse_raw, 6),
+            "LogLoss": round(logloss, 6),
+            "RMSE(bins)": round(rmse_bins, 6),
+            "ICI": round(ici, 6),
+            "AUC": auc,
+        },
+        "user": user_id,
+        "size": len(last_y),
+        "parameters": {
+            int(partition): list(map(lambda x: round(x, 6), w))
+            for partition, w in w_list[-1].items()
+        },
+    }
+
+    if RAW:
+        raw = {
+            "user": user_id,
+            "p": list(map(lambda x: round(x, 4), p)),
+            "y": list(map(int, y)),
+        }
+    else:
+        raw = None
+
+    return result, raw
+
+
+@catch_exceptions
 def process(user_id):
     plt.close("all")
     columns = ["card_id", "rating", "elapsed_days"]

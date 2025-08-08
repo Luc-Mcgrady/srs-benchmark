@@ -72,13 +72,16 @@ def process_wrapper(uid: int):
     return result, time, memory
 
 
+orig_process = script.process
+
+
 def process_wrapper_a(uid: int):
-    torch.set_num_threads(2)
+    script.process = orig_process
     return process_wrapper(uid)
 
 
 def process_wrapper_b(uid: int):
-    torch.set_num_threads(3)  # Num threads example
+    script.process = script.process2
     return process_wrapper(uid)
 
 
